@@ -15,7 +15,6 @@ import (
 	"github.com/RichardKnop/machinery/v1/config"
 	"github.com/RichardKnop/machinery/v1/tasks"
 
-	//"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -76,7 +75,6 @@ func ZeroScaling(name, kind, namespace, uuid string) (err error) {
 }
 
 func init() {
-	// k8s-client related initializations
 	k8sCnf, err := rest.InClusterConfig()
 	if err != nil {
 		log.Fatalln(err)
@@ -87,16 +85,13 @@ func init() {
 		log.Fatalln(err)
 	}
 
-	// machinery related initializations
 	machineryCnf, err := config.NewFromEnvironment()
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	log.Println(machineryCnf) // @debug
+	log.Println(machineryCnf)
 
 	server, err = machinery.NewServer(machineryCnf)
-	log.Println(server)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -111,6 +106,7 @@ func init() {
 
 func scheduleTask(w http.ResponseWriter, r *http.Request) {
 	log.Println("Scheduling task...")
+
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
 		panic(err)
@@ -123,8 +119,6 @@ func scheduleTask(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	log.Println(m) // @debug
-
 	var args []tasks.Arg
 
 	for _, v := range [3]string{"name", "kind", "namespace"} {
@@ -134,35 +128,32 @@ func scheduleTask(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	log.Println(args) // @debug
-
 	signature, err := tasks.NewSignature("zeroScaling", args)
 	if err != nil {
 		panic(err)
 	}
+
 	t := time.Now().UTC().Add(time.Minute)
 	signature.ETA = &t
 
 	// We want a task to know its uuid to decide whether it is 
-	// the EFFECTIVE task for pod controller in question.
+	// the EFFECTIVE task for the pod controller in question.
 	signature.Args = append(signature.Args, tasks.Arg{
 		Type: "string",
 		Value: signature.UUID,
 	})
 
-	// The most recent task is the EFFECTIVE task for pod this controller
-	key := fmt.Sprintf("%s:%s:%s", m["name"], m["kind"], m["namespace"]); // @todo: Is kind really necessary?
+	// The most recent task is the EFFECTIVE task for this pod controller
+	key := fmt.Sprintf("%s:%s:%s", m["name"], m["kind"], m["namespace"]);
 	err = redisClient.Set(context.TODO(), key, signature.UUID, 0).Err()
 	if err != nil {
 		panic(err)
 	}
 
-	_, err = server.SendTask(signature) // @todo: Maybe, I should append result to some list
+	_, err = server.SendTask(signature)
 	if err != nil {
 		panic(err)
 	}
-
-	log.Println(signature.Args) // @debug
 }
 
 func echo(w http.ResponseWriter, r *http.Request) {
