@@ -148,7 +148,7 @@ func scheduleTask(w http.ResponseWriter, r *http.Request) {
 	signature.ETA = &t
 
 	// We want task to know its uuid to decide whether it is effective
-	// pod controller in question.
+	// for pod controller in question.
 	signature.Args = append(signature.Args, tasks.Arg{
 		Type: "uint64",
 		Value: signature.UUID,
