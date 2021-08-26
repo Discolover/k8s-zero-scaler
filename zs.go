@@ -143,13 +143,14 @@ func scheduleTask(w http.ResponseWriter, r *http.Request) {
 	t := time.Now().UTC().Add(time.Minute)
 	signature.ETA = &t
 
-	// We want task to know its uuid to decide whether it is effective
-	// for pod controller in question.
+	// We want a task to know its uuid to decide whether it is 
+	// the EFFECTIVE task for pod controller in question.
 	signature.Args = append(signature.Args, tasks.Arg{
-		Type: "uint64",
+		Type: "string",
 		Value: signature.UUID,
 	})
 
+	// The most recent task is the EFFECTIVE task for pod this controller
 	key := fmt.Sprintf("%s:%s:%s", args[0], args[1], args[2]) // @todo: Is `Kind` really necessary?
 	err = redisClient.Set(context.TODO(), key, signature.UUID, 0).Err()
 	if err != nil {
