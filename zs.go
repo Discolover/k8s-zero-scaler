@@ -151,7 +151,7 @@ func scheduleTask(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// The most recent task is the EFFECTIVE task for pod this controller
-	key := fmt.Sprintf("%s:%s:%s", args[0], args[1], args[2]) // @todo: Is `Kind` really necessary?
+	key := fmt.Sprintf("%s:%s:%s", m["name"], m["kind"], m["namespace"]); // @todo: Is kind really necessary?
 	err = redisClient.Set(context.TODO(), key, signature.UUID, 0).Err()
 	if err != nil {
 		panic(err)
