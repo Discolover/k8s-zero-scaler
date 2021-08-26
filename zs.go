@@ -8,6 +8,8 @@ import (
 	"io"
 	"time"
 	"context"
+	"os"
+	"strings"
 
 	"github.com/RichardKnop/machinery/v1"
 	"github.com/RichardKnop/machinery/v1/config"
@@ -106,11 +108,11 @@ func init() {
 
 	server.RegisterTask("zeroScaling", ZeroScaling)
 
-	// redis-client related initializations
-	redisClient = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
+	sentinels := strings.Split(os.Getenv("SENTINELS"), ",")
+
+	redisClient = redis.NewFailoverClient(&redis.FailoverOptions{
+		MasterName: os.Getenv("REDIS_MASTER_NAME"),
+		SentinelAddrs: sentinels,
 	})
 }
 
