@@ -25,7 +25,7 @@ import (
 
 var (
 	clientset *kubernetes.Clientset
-	server machinery.Server
+	server *machinery.Server
 	redisClient *redis.Client
 )
 
@@ -95,21 +95,14 @@ func init() {
 
 	log.Println(machineryCnf) // @debug
 
-	server, err := machinery.NewServer(machineryCnf)
+	server, err = machinery.NewServer(machineryCnf)
+	log.Println(server)
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	worker := server.NewWorker("zero_scaler", 0)
-	err = worker.Launch()
-	if err != nil {
-		log.Fatalln(err)
-	}
-
 	server.RegisterTask("zeroScaling", ZeroScaling)
 
 	sentinels := strings.Split(os.Getenv("SENTINELS"), ",")
-
 	redisClient = redis.NewFailoverClient(&redis.FailoverOptions{
 		MasterName: os.Getenv("REDIS_MASTER_NAME"),
 		SentinelAddrs: sentinels,
@@ -117,26 +110,27 @@ func init() {
 }
 
 func scheduleTask(w http.ResponseWriter, r *http.Request) {
+	log.Println("Scheduling task...")
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Fatalln(err) // @todo: It should not os.Exit(1)!!!
+		panic(err)
 	}
 
-	var a []string
+	var m map[string]string
 
-	err = json.Unmarshal(raw, &a)
+	err = json.Unmarshal(raw, &m)
 	if err != nil {
-		log.Fatalln(err) // @todo: It should not os.Exit(1)!!!
+		panic(err)
 	}
 
-	log.Println(a) // @debug
+	log.Println(m) // @debug
 
 	var args []tasks.Arg
 
-	for _, v := range a {
+	for _, v := range [3]string{"name", "kind", "namespace"} {
 		args = append(args, tasks.Arg{
 			Type: "string",
-			Value: v,
+			Value: m[v],
 		})
 	}
 
@@ -144,7 +138,7 @@ func scheduleTask(w http.ResponseWriter, r *http.Request) {
 
 	signature, err := tasks.NewSignature("zeroScaling", args)
 	if err != nil {
-		log.Fatalln(err) // @todo: It should not os.Exit(1)!!!
+		panic(err)
 	}
 	t := time.Now().UTC().Add(time.Minute)
 	signature.ETA = &t
@@ -156,23 +150,40 @@ func scheduleTask(w http.ResponseWriter, r *http.Request) {
 		Value: signature.UUID,
 	})
 
-
 	key := fmt.Sprintf("%s:%s:%s", args[0], args[1], args[2]) // @todo: Is `Kind` really necessary?
 	err = redisClient.Set(context.TODO(), key, signature.UUID, 0).Err()
 	if err != nil {
-		log.Fatalln(err) // @todo: It should not os.Exit(1)!!!
+		panic(err)
 	}
 
 	_, err = server.SendTask(signature) // @todo: Maybe, I should append result to some list
 	if err != nil {
-		log.Fatalln(err) // @todo: this. It should not os.Exit(1)!!!
+		panic(err)
 	}
 
 	log.Println(signature.Args) // @debug
 }
 
+func echo(w http.ResponseWriter, r *http.Request) {
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Fprintln(w, string(data))
+	log.Println(string(data))
+}
+
 func main() {
+	worker := server.NewWorker("zero_scaler", 0)
+	go func() {
+			log.Println(server)
+			log.Fatalln(worker.Launch())
+	}()
+
+	http.HandleFunc("/echo", echo)
 	http.HandleFunc("/", scheduleTask)
-	//http.HandleFunc("/healthz", scheduleTask)
+
+	log.Println("Service is listening on port 8080...")
 	log.Fatalln(http.ListenAndServe(":8080", nil))
 }
