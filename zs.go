@@ -121,8 +121,9 @@ func scheduleTask(w http.ResponseWriter, r *http.Request) {
 
 	var args []tasks.Arg
 
-	for _, v := range [3]string{"name", "kind", "namespace"} {
+	for k, v := range [3]string{"name", "kind", "namespace"} {
 		args = append(args, tasks.Arg{
+			Name: k,
 			Type: "string",
 			Value: m[v],
 		})
